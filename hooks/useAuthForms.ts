@@ -61,47 +61,49 @@ export function useAuthForms() {
   }
 
   async function createAccount() {
-    console.log('createAccount clicked');
     setSignupError(null);
-    const u = norm(username); // always lowercased
-    if (!email || !password || !u) { setSignupError('Please fill all fields.'); return; }
-    if (uStatus !== 'ok') { setSignupError('Username is unavailable or invalid.'); return; }
+    const u = norm(username);
+    if (!email || !password || !u) {
+      setSignupError('Please fill all fields.');
+      return;
+    }
+    if (uStatus !== 'ok') {
+      setSignupError('Username is unavailable or invalid.');
+      return;
+    }
     setSignupLoading(true);
     try {
-      const { data, error } = await supabase.auth.signUp({
+      const { data, error: signUpError } = await supabase.auth.signUp({
         email,
         password,
-        options: {
-          emailRedirectTo: `${window.location.origin}/auth.html`,
-        },
       });
 
-      if (error) throw error;
-      
-      const user = data.user;
-      if (!user) throw new Error('Sign up failed. No user returned.');
-      
-      if (!data.session) {
-        // Email confirmation is required
-        localStorage.setItem('pending_username', u);
-        alert('Check your email for a confirmation link!');
-        return; // Stop execution until user confirms email
+      if (signUpError) {
+        throw signUpError;
       }
-      
-      // A session exists, so user is logged in (auto-confirmation on)
-      const { error: pe } = await supabase
-        .from('profiles')
-        .update({ username: u })
-        .eq('id', user.id);
 
-      if (pe) {
-        if ((pe as any).code === '23505') throw new Error('Username already taken.');
-        throw pe;
+      const user = data.user;
+      if (!user) {
+        throw new Error('Sign up succeeded but no user was returned.');
       }
+
+      const { error: insertError } = await supabase
+        .from('profiles')
+        .insert({ id: user.id, username: u });
+
+      if (insertError) {
+        if ((insertError as any).code === '23505') {
+          throw new Error('Username already taken.');
+        }
+        throw insertError;
+      }
+
       window.location.assign('/');
     } catch (e: any) {
       setSignupError(e?.message || 'Sign up failed. Please try again.');
-    } finally { setSignupLoading(false); }
+    } finally {
+      setSignupLoading(false);
+    }
   }
 
   return {
