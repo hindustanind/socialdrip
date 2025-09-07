@@ -1,0 +1,8 @@
+{
+  "name": "DripSocial",
+  "description": "An AI-powered virtual closet and stylist. Upload outfits, get 360° views, generate an avatar, and receive personalized fashion advice from AVA, your AI stylist.",
+  "requestFramePermissions": [
+    "microphone",
+    "camera"
+  ]
+}

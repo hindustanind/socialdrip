@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>DripSocial - AI Virtual Closet</title>
+  <link rel="manifest" href="/manifest.json" />
+  <meta name="theme-color" content="#0a0118" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>💧</text></svg>">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @tailwind base;
+    @tailwind components;
+    @tailwind utilities;
+
+    :root {
+      --app-bg: linear-gradient(to bottom right, #0a0118, #1a0a37);
+    }
+
+    html, body {
+      background: var(--app-bg);
+      background-attachment: fixed;
+    }
+
+    body {
+      color: #e5e7eb;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      overscroll-behavior-y: contain;
+      -webkit-tap-highlight-color: transparent;
+      -webkit-user-select: none;
+      -moz-user-select: none;
+      -ms-user-select: none;
+      user-select: none;
+    }
+    
+    body.no-scroll {
+      overflow: hidden;
+    }
+
+    input, textarea {
+      -webkit-user-select: auto;
+      -moz-user-select: auto;
+      -ms-user-select: auto;
+      user-select: auto;
+    }
+    
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    
+    .chat-scroll-area::-webkit-scrollbar { width: 4px; }
+    .chat-scroll-area::-webkit-scrollbar-track { background: transparent; }
+    .chat-scroll-area::-webkit-scrollbar-thumb { background: #00f2ff; border-radius: 20px; }
+
+    /* --- Page Transitions --- */
+    .page-transition-enter {
+        animation: page-enter 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    }
+    .page-transition-exit {
+        animation: page-exit 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    }
+    @keyframes page-enter {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes page-exit {
+        from { opacity: 1; transform: translateY(0); }
+        to { opacity: 0; transform: translateY(-10px); }
+    }
+    .backdrop-fade-in {
+        animation: fade-in 0.3s ease forwards;
+    }
+
+    /* --- Keyframe Animations --- */
+    @keyframes fade-in {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    .animate-fade-in { animation: fade-in 0.5s ease-in-out; }
+    
+    @keyframes shimmer {
+        0% { background-position: -200% 0; }
+        100% { background-position: 200% 0; }
+    }
+
+    .shimmer-overlay {
+        opacity: 0.15;
+        background: linear-gradient(90deg, rgba(42, 35, 54, 0) 25%, rgba(52, 42, 68, 0.5) 50%, rgba(42, 35, 54, 0) 75%);
+        background-size: 200% 100%;
+        animation: shimmer 1.4s linear infinite;
+        pointer-events: none;
+    }
+    
+    @keyframes swing-hanger {
+        0%, 100% { transform: rotate(15deg); }
+        50% { transform: rotate(-15deg); }
+    }
+    .animate-swing-hanger { animation: swing-hanger 2s ease-in-out infinite; }
+
+    @keyframes border-glow {
+        0% { border-color: rgba(244, 0, 244, 0.6); box-shadow: 0 0 10px rgba(244, 0, 244, 0.4); }
+        50% { border-color: rgba(0, 242, 255, 0.6); box-shadow: 0 0 10px rgba(0, 242, 255, 0.4); }
+        100% { border-color: rgba(244, 0, 244, 0.6); box-shadow: 0 0 10px rgba(244, 0, 244, 0.4); }
+    }
+    .animate-border-glow-always { animation: border-glow 4s linear infinite; }
+    .outfit-card-border-glow { border: 4px solid transparent; }
+    .outfit-card-border-glow:hover { animation: border-glow 4s linear infinite; }
+
+    @keyframes border-glow-red {
+        0% { background-position: 0% 50%; }
+        50% { background-position: 100% 50%; }
+        100% { background-position: 0% 50%; }
+    }
+    .animate-border-glow-red {
+        background: linear-gradient(90deg, #ff0000, #ff4500, #ff6347, #ff0000, #ff6347, #ff4500, #ff0000);
+        background-size: 400% 400%;
+        animation: border-glow-red 4s ease infinite;
+    }
+    
+    @keyframes fire-shimmer {
+        0%, 100% {
+            color: #ff7f50; /* Coral */
+            text-shadow: 0 0 4px #ff4500, 0 0 8px #ff6347;
+            transform: scale(1.0);
+        }
+        50% {
+            color: #ff6347; /* Tomato */
+            text-shadow: 0 0 6px #ff4500, 0 0 12px #ff6347, 0 0 16px #ff4500;
+            transform: scale(1.05);
+        }
+    }
+    .animate-fire-shimmer {
+        animation: fire-shimmer 2.5s ease-in-out infinite;
+    }
+
+    @keyframes heart-beat {
+        0%, 100% { transform: scale(1); }
+        50% { transform: scale(1.3); }
+    }
+    .animate-heart-beat { animation: heart-beat 0.3s ease-in-out; }
+
+    @keyframes like-heart-pop {
+        0% { transform: scale(0); opacity: 0; }
+        50% { transform: scale(1.2); opacity: 1; }
+        100% { transform: scale(1); opacity: 1; }
+    }
+    .animate-like-heart-pop { animation: like-heart-pop 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+
+    .ripple-container { position: relative; overflow: hidden; }
+    .ripple {
+        position: absolute;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.3);
+        transform: scale(0);
+        animation: ripple-effect 0.6s linear;
+    }
+    @keyframes ripple-effect {
+        to { transform: scale(4); opacity: 0; }
+    }
+
+    @keyframes hint-fade {
+        0%, 100% { opacity: 0; }
+        20%, 80% { opacity: 1; }
+    }
+    .animate-hint { animation: hint-fade 3s ease-in-out 1; }
+
+    @keyframes category-button-reveal-anim {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    .category-button-reveal {
+        animation: category-button-reveal-anim 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+        animation-delay: var(--delay, 0ms);
+        opacity: 0;
+    }
+    
+    @keyframes outfit-card-reveal-anim {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    .outfit-card-reveal {
+        animation: outfit-card-reveal-anim 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+        animation-delay: var(--delay, 0ms);
+        opacity: 0;
+    }
+
+    /* --- Preview Shimmer & Swap (from GenerationLoader) --- */
+    .previewFrame.loading .previewSkeleton.loading { display: block; }
+    .previewFrame.instant-swap .previewImg { transition: none !important; }
+
+    /* --- Login Page Carousel Animations --- */
+    @keyframes scroll-up {
+        from { transform: translateY(0); }
+        to { transform: translateY(-50%); }
+    }
+    @keyframes scroll-down {
+        from { transform: translateY(-50%); }
+        to { transform: translateY(0); }
+    }
+    .animate-scroll-up {
+        animation: scroll-up linear infinite;
+    }
+    .animate-scroll-down {
+        animation: scroll-down linear infinite;
+    }
+    .bg-grid-white\/\[0\.05\] {
+        background-image: linear-gradient(white 1px, transparent 1px), linear-gradient(to right, white 1px, transparent 1px);
+        background-size: 40px 40px;
+        background-color: transparent;
+        opacity: 0.05;
+    }
+  </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react/": "https://aistudiocdn.com/react@^19.1.1/",
+    "react": "https://aistudiocdn.com/react@^19.1.1",
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.17.0",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.1.1/",
+    "@supabase/supabase-js": "https://aistudiocdn.com/@supabase/supabase-js@^2.57.2"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
+<body>
+  <noscript>You need to enable JavaScript to run this app.</noscript>
+  <div id="root"></div>
+  <script>
+    window.__SUPABASE = {
+      url: "https://qdzkexzrgmgwrbigyqoj.supabase.co",
+      anon: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFkemtleHpyZ21nd3JiaWd5cW9qIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY5NjM2NDEsImV4cCI6MjA3MjUzOTY0MX0.P9Gw5qHht9AL3A8D8KFlRBQUQEsNoOd_J7dXahgofbY"
+    };
+  </script>
+  <script type="module" src="/index.tsx"></script>
+</body>
+</html>
