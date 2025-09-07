@@ -61,6 +61,7 @@ export function useAuthForms() {
   }
 
   async function createAccount() {
+    console.log('createAccount clicked');
     setSignupError(null);
     const u = norm(username); // always lowercased
     if (!email || !password || !u) { setSignupError('Please fill all fields.'); return; }
