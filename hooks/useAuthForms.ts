@@ -62,9 +62,10 @@ export function useAuthForms() {
 
   async function createAccount() {
     setSignupError(null);
-    const u = norm(username);
-    if (!email || !password || !u) {
-      setSignupError('Please fill all fields.');
+    const lowercasedUsername = username.trim().toLowerCase();
+
+    if (!email || !password || !lowercasedUsername) {
+      setSignupError('Please fill all fields (username/email/password).');
       return;
     }
     if (uStatus !== 'ok') {
@@ -89,7 +90,7 @@ export function useAuthForms() {
 
       const { error: insertError } = await supabase
         .from('profiles')
-        .insert({ id: user.id, username: u });
+        .insert({ id: user.id, username: lowercasedUsername });
 
       if (insertError) {
         if ((insertError as any).code === '23505') {
