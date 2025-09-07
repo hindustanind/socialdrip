@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import Header from './components/myOutfits/Header';
 import HomePage from './components/home/HomePage';
@@ -58,6 +59,11 @@ const AppContent: React.FC = () => {
     const [isInitialLogin, setIsInitialLogin] = useState(false);
     const [lastWelcomeToastDate, setLastWelcomeToastDate] = useLocalStorage<string | null>('dripsocial-last-welcome-toast', null);
     
+    const showToast = useCallback((message: string, type: 'info' | 'error' = 'info', duration = 8000) => {
+        setToast({ message, visible: true, type });
+        setTimeout(() => setToast(prev => ({ ...prev, visible: false })), duration);
+    }, []);
+
     useEffect(() => {
         if (!ready) return; // Wait for session check to complete
 
@@ -65,7 +71,6 @@ const AppContent: React.FC = () => {
             // If session exists, but user data isn't loaded or doesn't match, fetch it
             if (!user || user.id !== session.user.id) {
                 setLoading(true);
-                // FIX: The Promise-like object returned by the Supabase client does not have a `.finally()` method. Wrap the call in `Promise.resolve()` to convert it to a native Promise, which ensures `.finally()` is available and executes correctly.
                 Promise.resolve(supabase
                     .from('profiles')
                     .select('*')
@@ -74,7 +79,16 @@ const AppContent: React.FC = () => {
                     .then(({ data: profile, error }) => {
                         if (error) {
                             console.error('Error fetching profile:', error);
-                            setUser(null);
+                            // Even if there's an error, if we have a session, create a fallback user to prevent logout.
+                            const fallbackUser: User = {
+                                id: session.user.id,
+                                username: session.user.email?.split('@')[0] || 'error_user',
+                                displayName: session.user.email?.split('@')[0] || 'User',
+                                styleSignature: 'Style under construction.',
+                                profilePicture: null,
+                            };
+                            setUser(fallbackUser);
+                            showToast('Could not load profile, using temporary data.', 'error');
                         } else if (profile) {
                             const appUser: User = {
                                 id: session.user.id,
@@ -85,8 +99,16 @@ const AppContent: React.FC = () => {
                             };
                             setUser(appUser);
                         } else {
-                            // Can happen if profile creation is pending post-signup
-                            setUser(null); 
+                            // Profile doesn't exist yet (e.g., right after signup).
+                            // Create a default user object to prevent logout loop.
+                            const newUser: User = {
+                                id: session.user.id,
+                                username: session.user.email?.split('@')[0] || 'new_user',
+                                displayName: session.user.email?.split('@')[0] || 'New User',
+                                styleSignature: 'Just starting my style journey!',
+                                profilePicture: null,
+                            };
+                            setUser(newUser);
                         }
                     }).finally(() => {
                         setLoading(false);
@@ -100,13 +122,8 @@ const AppContent: React.FC = () => {
             setUser(null);
             setLoading(false);
         }
-    }, [ready, session, user, setUser, setLoading]);
+    }, [ready, session, user, setUser, setLoading, showToast]);
 
-
-    const showToast = useCallback((message: string, type: 'info' | 'error' = 'info', duration = 8000) => {
-        setToast({ message, visible: true, type });
-        setTimeout(() => setToast(prev => ({ ...prev, visible: false })), duration);
-    }, []);
 
     const incrementDripScore = useCallback(() => {
         setDripScore(prev => prev + 1);
