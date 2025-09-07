@@ -65,11 +65,12 @@ const AppContent: React.FC = () => {
             // If session exists, but user data isn't loaded or doesn't match, fetch it
             if (!user || user.id !== session.user.id) {
                 setLoading(true);
-                supabase
+                // FIX: The Promise-like object returned by the Supabase client does not have a `.finally()` method. Wrap the call in `Promise.resolve()` to convert it to a native Promise, which ensures `.finally()` is available and executes correctly.
+                Promise.resolve(supabase
                     .from('profiles')
                     .select('*')
                     .eq('id', session.user.id)
-                    .maybeSingle()
+                    .maybeSingle())
                     .then(({ data: profile, error }) => {
                         if (error) {
                             console.error('Error fetching profile:', error);
