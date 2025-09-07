@@ -65,14 +65,30 @@ export function useAuthForms() {
     setSignupError(null);
     const u = norm(username); // always lowercased
     if (!email || !password || !u) { setSignupError('Please fill all fields.'); return; }
-    if (uStatus !== 'ok') { setSignupError('Username unavailable.'); return; }
+    if (uStatus !== 'ok') { setSignupError('Username is unavailable or invalid.'); return; }
     setSignupLoading(true);
     try {
-      const { data, error } = await supabase.auth.signUp({ email, password });
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          emailRedirectTo: `${window.location.origin}/auth.html`,
+        },
+      });
+
       if (error) throw error;
+      
       const user = data.user;
       if (!user) throw new Error('Sign up failed. No user returned.');
       
+      if (!data.session) {
+        // Email confirmation is required
+        localStorage.setItem('pending_username', u);
+        alert('Check your email for a confirmation link!');
+        return; // Stop execution until user confirms email
+      }
+      
+      // A session exists, so user is logged in (auto-confirmation on)
       const { error: pe } = await supabase
         .from('profiles')
         .update({ username: u })

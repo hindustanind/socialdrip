@@ -29,6 +29,35 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     useEffect(() => {
         const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
             if (session) {
+                const pendingUsername = localStorage.getItem('pending_username');
+                if (pendingUsername) {
+                    // Attempt to insert profile with username. This is expected to fail if a trigger already created the profile row.
+                    const { error: insertError } = await supabase
+                        .from('profiles')
+                        .insert({ id: session.user.id, username: pendingUsername });
+
+                    if (insertError) {
+                        // 23505 is unique_violation. Assume it's because the profile row exists, so try updating.
+                        if ((insertError as any).code === '23505') { 
+                            const { error: updateError } = await supabase
+                                .from('profiles')
+                                .update({ username: pendingUsername })
+                                .eq('id', session.user.id);
+                            
+                            if (updateError) {
+                                console.error('Error updating profile with pending username after insert failed:', updateError);
+                            } else {
+                                localStorage.removeItem('pending_username');
+                            }
+                        } else {
+                             console.error('Error inserting profile with pending username:', insertError);
+                        }
+                    } else {
+                        // Insert succeeded, remove from local storage
+                        localStorage.removeItem('pending_username');
+                    }
+                }
+                
                 const { data: profile, error } = await supabase
                     .from('profiles')
                     .select('*')
