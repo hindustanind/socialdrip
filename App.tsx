@@ -12,6 +12,8 @@ import OutfitDetailModal from './components/myOutfits/OutfitDetailModal';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import LoginPage from './components/auth/LoginPage';
 import Spinner from './components/shared/Spinner';
+import { useAuthBoot } from './hooks/useAuthBoot';
+import { supabase } from './services/supabaseClient';
 
 type Page = 'home' | 'generator' | 'closet' | 'ava' | 'profile';
 
@@ -31,7 +33,8 @@ const FullScreenLoader: React.FC<{ text?: string }> = ({ text = 'Loading...' }) 
 );
 
 const AppContent: React.FC = () => {
-    const { user, loading } = useAuth();
+    const { ready, session } = useAuthBoot();
+    const { user, setUser, loading, setLoading } = useAuth();
     const [currentPage, setCurrentPage] = useState<Page>('home');
     const previousUserRef = useRef(user); // Track previous user state
 
@@ -54,6 +57,49 @@ const AppContent: React.FC = () => {
     
     const [isInitialLogin, setIsInitialLogin] = useState(false);
     const [lastWelcomeToastDate, setLastWelcomeToastDate] = useLocalStorage<string | null>('dripsocial-last-welcome-toast', null);
+    
+    useEffect(() => {
+        if (!ready) return; // Wait for session check to complete
+
+        if (session) {
+            // If session exists, but user data isn't loaded or doesn't match, fetch it
+            if (!user || user.id !== session.user.id) {
+                setLoading(true);
+                supabase
+                    .from('profiles')
+                    .select('*')
+                    .eq('id', session.user.id)
+                    .maybeSingle()
+                    .then(({ data: profile, error }) => {
+                        if (error) {
+                            console.error('Error fetching profile:', error);
+                            setUser(null);
+                        } else if (profile) {
+                            const appUser: User = {
+                                id: session.user.id,
+                                username: profile.username,
+                                displayName: profile.username,
+                                styleSignature: profile.style_signature || `Exploring the world of fashion with DripSocial!`,
+                                profilePicture: profile.avatar_url || null,
+                            };
+                            setUser(appUser);
+                        } else {
+                            // Can happen if profile creation is pending post-signup
+                            setUser(null); 
+                        }
+                    }).finally(() => {
+                        setLoading(false);
+                    });
+            } else {
+                // User is already in sync with session, no need to load
+                setLoading(false);
+            }
+        } else {
+            // No session, ensure user is logged out and stop loading
+            setUser(null);
+            setLoading(false);
+        }
+    }, [ready, session, user, setUser, setLoading]);
 
 
     const showToast = useCallback((message: string, type: 'info' | 'error' = 'info', duration = 8000) => {
@@ -223,8 +269,8 @@ const AppContent: React.FC = () => {
     }), [user, viewedUserId, outfits, avatar, isDevMode, setOutfits, setAvatar, setSelectedOutfit, handleNavigate, handleOutfitSaved, dripScore, showToast]);
 
 
-    if (loading) {
-        return <FullScreenLoader text="Loading..." />;
+    if (!ready || loading) {
+        return <FullScreenLoader text={!ready ? "Booting up..." : "Loading Profile..."} />;
     }
 
     if (!user) {

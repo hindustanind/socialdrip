@@ -1,11 +1,13 @@
-import React, { createContext, useContext, ReactNode, useState, useEffect } from 'react';
+import React, { createContext, useContext, ReactNode, useState } from 'react';
 import { User } from '../types';
 import useLocalStorage from '../hooks/useLocalStorage';
 import { supabase } from '../services/supabaseClient';
 
 interface AuthContextType {
     user: User | null;
+    setUser: React.Dispatch<React.SetStateAction<User | null>>;
     loading: boolean;
+    setLoading: React.Dispatch<React.SetStateAction<boolean>>;
     logout: () => void;
     updateProfile: (updates: Partial<User>) => Promise<void>;
     login: (user: User) => void;
@@ -26,70 +28,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const [user, setUser] = useLocalStorage<User | null>('dripsocial-user', null);
     const [loading, setLoading] = useState(true);
 
-    useEffect(() => {
-        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-            if (session) {
-                const pendingUsername = localStorage.getItem('pending_username');
-                if (pendingUsername) {
-                    // Attempt to insert profile with username. This is expected to fail if a trigger already created the profile row.
-                    const { error: insertError } = await supabase
-                        .from('profiles')
-                        .insert({ id: session.user.id, username: pendingUsername });
-
-                    if (insertError) {
-                        // 23505 is unique_violation. Assume it's because the profile row exists, so try updating.
-                        if ((insertError as any).code === '23505') { 
-                            const { error: updateError } = await supabase
-                                .from('profiles')
-                                .update({ username: pendingUsername })
-                                .eq('id', session.user.id);
-                            
-                            if (updateError) {
-                                console.error('Error updating profile with pending username after insert failed:', updateError);
-                            } else {
-                                localStorage.removeItem('pending_username');
-                            }
-                        } else {
-                             console.error('Error inserting profile with pending username:', insertError);
-                        }
-                    } else {
-                        // Insert succeeded, remove from local storage
-                        localStorage.removeItem('pending_username');
-                    }
-                }
-                
-                const { data: profile, error } = await supabase
-                    .from('profiles')
-                    .select('*')
-                    .eq('id', session.user.id)
-                    .single();
-
-                if (error && error.code !== 'PGRST116') { // PGRST116: no rows found
-                    console.error('Error fetching profile:', error);
-                    setUser(null);
-                } else if (profile) {
-                    const appUser: User = {
-                        id: session.user.id,
-                        username: profile.username,
-                        displayName: profile.username,
-                        styleSignature: profile.style_signature || `Exploring the world of fashion with DripSocial!`,
-                        profilePicture: profile.avatar_url || null,
-                    };
-                    setUser(appUser);
-                } else {
-                    setUser(null); // User exists in auth, but not in profiles. Log them out.
-                }
-            } else {
-                setUser(null);
-            }
-            setLoading(false);
-        });
-
-        return () => {
-            subscription?.unsubscribe();
-        };
-    }, []);
-
     const login = (user: User) => {
         setUser(user);
     };
@@ -101,6 +39,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         window.localStorage.removeItem('dripsocial-outfits');
         window.localStorage.removeItem('dripsocial-avatar');
         window.localStorage.removeItem('dripsocial-user');
+        window.localStorage.removeItem('dripsocial-dripscore');
+        window.localStorage.removeItem('dripsocial-last-welcome-toast');
     };
 
     const updateProfile = async (updates: Partial<User>): Promise<void> => {
@@ -110,7 +50,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // Dummy signup for legacy components that are no longer used
     const legacySignup = (username: string, email: string, password: string) => false;
 
-    const value = { user, loading, logout, updateProfile, login, signup: legacySignup };
+    const value = { user, setUser, loading, setLoading, logout, updateProfile, login, signup: legacySignup };
 
     return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

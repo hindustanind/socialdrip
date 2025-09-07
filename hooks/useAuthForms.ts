@@ -54,7 +54,7 @@ export function useAuthForms() {
     try {
       const { error } = await supabase.auth.signInWithPassword({ email: loginEmail, password: loginPassword });
       if (error) throw error;
-      window.location.assign('/');
+      // No redirect needed, state change will handle it.
     } catch (e: any) {
       setLoginError(e?.message || 'Login failed. Please try again.');
     } finally { setLoginLoading(false); }
@@ -98,8 +98,7 @@ export function useAuthForms() {
         }
         throw insertError;
       }
-
-      window.location.assign('/');
+      // No redirect needed, state change will handle it.
     } catch (e: any) {
       setSignupError(e?.message || 'Sign up failed. Please try again.');
     } finally {
