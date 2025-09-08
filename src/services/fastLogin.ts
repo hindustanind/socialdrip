@@ -1,5 +1,6 @@
 import React from 'react';
-import { supabase } from "./supabaseClient";
+// FIX: Updated Supabase client import path.
+import { supabase } from "../lib/supa";
 
 // Tiny helper to race a promise with a timeout
 function withTimeout<T>(p: Promise<T>, ms = 4000) {

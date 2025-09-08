@@ -1,123 +1,77 @@
-import { render, act } from '@testing-library/react';
+import { render, act, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import React, { ReactNode } from 'react';
-import { AuthProvider, useAuth, AuthContext } from './AuthContext';
-import { User } from '../types';
+import React from 'react';
+import { AuthProvider, useAuth } from './AuthContext';
 
 // Mock dependencies of AuthContext
-vi.mock('../hooks/useMyProfile', () => ({
-    useMyProfile: () => ({
-        profile: { username: 'testuser', displayName: 'Test User', profilePicture: null },
-        loading: false,
-        updateName: vi.fn().mockResolvedValue(undefined),
-        updateAvatar: vi.fn().mockResolvedValue(undefined),
-    }),
-}));
+vi.mock('../hooks/useAuthBoot');
+vi.mock('../services/fastLogout');
+vi.mock('../services/logoutFlag');
+vi.mock('../services/profile');
+vi.mock('../dev/logoutProfiler');
 
-vi.mock('../services/fastLogout', () => ({
-    fastLogout: vi.fn((options) => options.onLocalClear()),
-}));
-
-vi.mock('../auth/session', () => ({
-    bootSessionOnce: vi.fn(),
-    onSession: vi.fn(() => () => {}), // Returns an unsubscribe function
-}));
-
-vi.mock('../hooks/useLocalStorage', () => {
-    let state: any = null;
-    return {
-        default: vi.fn(() => [state, (newState: any) => { state = newState; }]),
-    };
-});
+import { useAuthBoot } from '../hooks/useAuthBoot';
+import { fastLogout } from '../services/fastLogout';
 
 // A simple test consumer component
 const TestConsumer = () => {
     const auth = useAuth();
+    if (auth.loading) return <div>App is loading...</div>;
     return (
         <div>
             <div data-testid="loading">{String(auth.loading)}</div>
             <div data-testid="isLoggingOut">{String(auth.isLoggingOut)}</div>
             <div data-testid="user">{auth.user ? auth.user.id : 'null'}</div>
             <button onClick={auth.logout}>Logout</button>
+            <button onClick={() => auth.setIsLoggingOut(false)}>ResetLogout</button>
         </div>
-    );
-};
-
-// Custom render function to wrap component in our provider
-const renderWithAuthProvider = (
-    ui: ReactNode,
-    // Allow passing a custom context value for complex scenarios
-    providerProps?: { value: any }
-) => {
-    return render(
-        <AuthContext.Provider {...providerProps}>
-            {ui}
-        </AuthContext.Provider>
     );
 };
 
 
 describe('AuthContext State Transitions', () => {
 
+    beforeEach(() => {
+        vi.clearAllMocks();
+        // FIX: Correctly mock fastLogout to invoke its onLocalClear callback.
+        vi.mocked(fastLogout).mockImplementation((options) => {
+            options?.onLocalClear?.();
+            return Promise.resolve();
+        });
+    });
+
     it('should correctly transition through logout states', async () => {
-        const mockUser: User = { id: '123', username: 'test', displayName: 'Test', profilePicture: null, styleSignature: null };
-        let contextValue: any;
-
-        // Render the provider and a consumer to capture the context value
-        const TestComponent = () => {
-            contextValue = useAuth();
-            return null;
-        };
-
+        // 1. Initial State (Simulate being logged in)
+        vi.mocked(useAuthBoot).mockReturnValue({ session: { user: { id: '123' } }, ready: true });
+        
         render(
             <AuthProvider>
-                <TestComponent />
+                <TestConsumer />
             </AuthProvider>
         );
 
-        // 1. Initial State (Simulate being logged in)
+        // Wait for profile loading to complete.
+        await screen.findByTestId('user');
+
+        expect(screen.getByTestId('user').textContent).toBe('123');
+        expect(screen.getByTestId('isLoggingOut').textContent).toBe('false');
+
+        // 2. Click logout button
+        const logoutButton = screen.getByText('Logout');
         act(() => {
-            // Manually set the user to simulate the logged-in state provided by hooks
-            const setUser = (contextValue as any)._setUser; // This assumes an internal setter, for testing only
-            if (setUser) setUser(mockUser);
+            fireEvent.click(logoutButton);
         });
 
-        // For this test, we create a simplified mock of the context to control state
-        const state = {
-            user: mockUser,
-            isLoggingOut: false,
-            loading: false,
-            logout: vi.fn(),
-            // ...other mocks
-        };
+        // 3. Assert intermediate state during logout
+        // isLoggingOut becomes true, and user becomes null.
+        expect(screen.getByTestId('isLoggingOut').textContent).toBe('true');
+        expect(screen.getByTestId('user').textContent).toBe('null');
 
-        // Re-implement logout logic for the test
-        state.logout = () => {
-            act(() => {
-                state.isLoggingOut = true;
-            });
-            // Simulate clearing user
-            act(() => {
-                state.user = null;
-            });
-            // Simulate effect that resets the flag
-            act(() => {
-                state.isLoggingOut = false;
-            });
-        };
-
-        // Initial state check
-        expect(state.user).not.toBeNull();
-        expect(state.isLoggingOut).toBe(false);
-
-        // 2. Call logout
+        // 4. Assert that the state can be reset by a component like LoginPage
+        const resetButton = screen.getByText('ResetLogout');
         act(() => {
-            state.logout();
+            fireEvent.click(resetButton);
         });
-        
-        // Final state check
-        expect(state.user).toBeNull();
-        expect(state.isLoggingOut).toBe(false);
-
+        expect(screen.getByTestId('isLoggingOut').textContent).toBe('false');
     });
 });

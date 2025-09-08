@@ -1,4 +1,5 @@
-import { supabase } from "../services/supabaseClient";
+// FIX: Updated Supabase client import path.
+import { supabase } from "../lib/supa";
 import { isLogoutFlagSet } from "../services/logoutFlag";
 
 let currentSession: any = null;

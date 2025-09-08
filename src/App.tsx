@@ -13,7 +13,13 @@ import OutfitDetailModal from './components/myOutfits/OutfitDetailModal';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import LoginPage from './components/auth/LoginPage';
 import Spinner from './components/shared/Spinner';
-import { migrateLocalCloset, listOutfits, createOutfit, deleteOutfit, updateOutfit } from './services/outfits';
+import { listOutfits, createOutfit, deleteOutfit, updateOutfit } from './lib/outfits';
+import ConnectivityProbes from './components/ConnectivityProbes';
+import { installPurgeCacheUtil } from './dev/purgeCache';
+
+if (process.env.NODE_ENV !== 'production') {
+    installPurgeCacheUtil();
+}
 
 type Page = 'home' | 'generator' | 'closet' | 'ava' | 'profile';
 
@@ -45,6 +51,9 @@ const AppContent: React.FC = () => {
     const [outfits, setOutfits] = useState<Outfit[]>([]);
     const [isLoadingOutfits, setIsLoadingOutfits] = useState(true);
     const [closetError, setClosetError] = useState<string | null>(null);
+    const [nextCursor, setNextCursor] = useState<string | null>(null);
+    const [hasMore, setHasMore] = useState(true);
+    
     const [avatar, setAvatar] = useLocalStorage<Avatar | null>('dripsocial-avatar', null);
     const [dripScore, setDripScore] = useLocalStorage<number>('dripsocial-dripscore', 0);
     const [isDevMode, setIsDevMode] = useState(false);
@@ -89,19 +98,39 @@ const AppContent: React.FC = () => {
         setIsLoadingOutfits(true);
         setClosetError(null);
         try {
-            await migrateLocalCloset();
-            const fetchedOutfits = await listOutfits();
-            setOutfits(fetchedOutfits);
+            const { items, nextCursor: newCursor } = await listOutfits();
+            setOutfits(items);
+            setNextCursor(newCursor);
+            setHasMore(newCursor !== null);
         } catch (error: any) {
             const errorMessage = error.message || "An unknown error occurred while loading your closet.";
             console.error("Failed to initialize closet:", error);
             setClosetError(errorMessage);
-            setOutfits([]);
+            setOutfits([]); // Ensure outfits is empty on error
             showToast("Could not load your closet.", 'error');
         } finally {
             setIsLoadingOutfits(false);
         }
     }, [user, showToast]);
+
+    const loadMoreOutfits = useCallback(async () => {
+        if (!hasMore || isLoadingOutfits || !nextCursor) return;
+        
+        setIsLoadingOutfits(true);
+        try {
+            const { items, nextCursor: newCursor } = await listOutfits(20, nextCursor);
+            setOutfits(prev => [...prev, ...items]);
+            setNextCursor(newCursor);
+            setHasMore(newCursor !== null);
+        } catch (error: any) {
+             const errorMessage = error.message || "An unknown error occurred while loading more outfits.";
+             console.error("Failed to load more outfits:", error);
+             showToast("Could not load more outfits.", 'error');
+        } finally {
+            setIsLoadingOutfits(false);
+        }
+    }, [hasMore, isLoadingOutfits, nextCursor, showToast]);
+
 
     useEffect(() => {
         initializeCloset();
@@ -247,6 +276,8 @@ const AppContent: React.FC = () => {
                 isDevMode={isDevMode}
                 setSelectedOutfit={setSelectedOutfit}
                 dripScore={dripScore}
+                loadMoreOutfits={loadMoreOutfits}
+                hasMore={hasMore}
             />
         ),
         ava: (
@@ -259,10 +290,10 @@ const AppContent: React.FC = () => {
                 onNavigate={handleNavigate}
             />
         ),
-    }), [user, viewedUserId, outfits, isLoadingOutfits, avatar, isDevMode, setAvatar, setSelectedOutfit, handleNavigate, handleOutfitSaved, dripScore, showToast, handleUpdateOutfit, handleDeleteOutfit, closetError, initializeCloset]);
+    }), [user, viewedUserId, outfits, isLoadingOutfits, avatar, isDevMode, setAvatar, setSelectedOutfit, handleNavigate, handleOutfitSaved, dripScore, showToast, handleUpdateOutfit, handleDeleteOutfit, closetError, initializeCloset, loadMoreOutfits, hasMore]);
 
     if (loading || isLoggingOut) {
-        return <FullScreenLoader text={isLoggingOut ? "Logging out..." : "Booting up..."} />;
+        return <FullScreenLoader text={isLoggingOut ? "Logging out..." : "Loading..."} />;
     }
 
     if (!user) {
@@ -271,6 +302,7 @@ const AppContent: React.FC = () => {
     
     return (
         <div className="min-h-screen w-full relative">
+            <ConnectivityProbes />
             <Header 
                 currentPage={currentPage} 
                 setCurrentPage={handleNavigate} 

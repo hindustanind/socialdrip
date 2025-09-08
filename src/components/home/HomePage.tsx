@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import Button from '../shared/Button';
 import { Outfit } from '../../types';
 import { MALE_IMAGES, FEMALE_IMAGES } from '../../constants';
+import SignedImg from '../shared/SignedImg';
 
 // Helper function to shuffle an array (Fisher-Yates)
 const shuffleArray = <T,>(array: T[]): T[] => {
@@ -18,13 +19,15 @@ const RotatingOutfitCard: React.FC<{ outfit: Outfit; onClick: () => void; }> = (
     const [currentIndex, setCurrentIndex] = useState(0);
 
     useEffect(() => {
-        if (outfit.images.length > 1) {
+        if ((outfit.imagePaths?.length || 0) > 1) {
             const interval = setInterval(() => {
-                setCurrentIndex(prev => (prev + 1) % outfit.images.length);
+                setCurrentIndex(prev => (prev + 1) % (outfit.imagePaths?.length || 1));
             }, 4000); // 4000ms interval for a slow rotation
             return () => clearInterval(interval);
         }
-    }, [outfit.images.length]);
+    }, [outfit.imagePaths]);
+    
+    const currentPath = outfit.imagePaths?.[currentIndex];
 
     return (
         <div
@@ -35,12 +38,21 @@ const RotatingOutfitCard: React.FC<{ outfit: Outfit; onClick: () => void; }> = (
             aria-label={`View details for ${outfit.name || 'outfit'}`}
             onKeyDown={(e) => { if (e.key === 'Enter') onClick(); }}
         >
-            <img
-                src={outfit.images[currentIndex]} // Use currentIndex
-                alt={outfit.name || 'User saved outfit'}
-                className="relative z-[1] h-full w-full object-cover"
-                draggable="false"
-            />
+            {currentPath ? (
+                <SignedImg
+                    path={currentPath}
+                    alt={outfit.name || 'User saved outfit'}
+                    className="relative z-[1] h-full w-full object-cover"
+                    draggable="false"
+                />
+            ) : (
+                 <img
+                    src={outfit.images[currentIndex]}
+                    alt={outfit.name || 'User saved outfit'}
+                    className="relative z-[1] h-full w-full object-cover"
+                    draggable="false"
+                />
+            )}
             {/* Vignette Effect */}
             <div className="absolute inset-0 z-[2] bg-gradient-to-t from-black/60 to-transparent pointer-events-none"></div>
             

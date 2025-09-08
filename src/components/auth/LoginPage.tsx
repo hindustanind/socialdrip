@@ -1,25 +1,17 @@
 import React, { useEffect } from 'react';
 import ImageCarouselColumn from './ImageCarouselColumn';
 import AuthCard from './AuthCard';
-import { clearLogoutFlag } from '../../services/logoutFlag';
 import { useAuth } from '../../contexts/AuthContext';
-
-// Dev-only profiler import
 import { profiler } from "../../dev/logoutProfiler";
 
 const LoginPage: React.FC = () => {
     const { isLoggingOut, setIsLoggingOut } = useAuth();
 
     useEffect(() => {
-        // Mark the final step of the logout profiling sequence.
-        if (process.env.NODE_ENV !== 'production') {
-            profiler.markLoginMounted();
-        }
-
-        // When the login page mounts, the logout process is considered complete.
-        // This clears the session flag and tells the AuthContext to remove the overlay.
-        clearLogoutFlag();
+        // This effect runs when the LoginPage is mounted. If a logout was in
+        // progress, this marks the end of the transition, allowing the overlay to be removed.
         if (isLoggingOut) {
+            if (process.env.NODE_ENV !== 'production') profiler.markLoginMounted();
             setIsLoggingOut(false);
         }
 

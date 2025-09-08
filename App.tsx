@@ -44,8 +44,10 @@ const AppContent: React.FC = () => {
 
     const [outfits, setOutfits] = useState<Outfit[]>([]);
     const [isLoadingOutfits, setIsLoadingOutfits] = useState(true);
-    // FIX: Add state for closet loading errors.
     const [closetError, setClosetError] = useState<string | null>(null);
+    const [nextCursor, setNextCursor] = useState<string | null>(null);
+    const [hasMore, setHasMore] = useState(true);
+    
     const [avatar, setAvatar] = useLocalStorage<Avatar | null>('dripsocial-avatar', null);
     const [dripScore, setDripScore] = useLocalStorage<number>('dripsocial-dripscore', 0);
     const [isDevMode, setIsDevMode] = useState(false);
@@ -68,7 +70,6 @@ const AppContent: React.FC = () => {
         setTimeout(() => setToast(prev => ({ ...prev, visible: false })), duration);
     }, []);
     
-    // FIX: Abstract closet initialization to a memoized function for retries and pass it down.
     const initializeCloset = useCallback(async () => {
         if (!user) {
             setOutfits([]);
@@ -80,8 +81,10 @@ const AppContent: React.FC = () => {
         setClosetError(null);
         try {
             await migrateLocalCloset();
-            const fetchedOutfits = await listOutfits();
-            setOutfits(fetchedOutfits);
+            const { items, nextCursor: newCursor } = await listOutfits();
+            setOutfits(items);
+            setNextCursor(newCursor);
+            setHasMore(newCursor !== null);
         } catch (error: any) {
             const errorMessage = error.message || "An unknown error occurred while loading your closet.";
             console.error("Failed to initialize closet:", error);
@@ -92,6 +95,25 @@ const AppContent: React.FC = () => {
             setIsLoadingOutfits(false);
         }
     }, [user, showToast]);
+
+    const loadMoreOutfits = useCallback(async () => {
+        if (!hasMore || isLoadingOutfits || !nextCursor) return;
+        
+        setIsLoadingOutfits(true);
+        try {
+            const { items, nextCursor: newCursor } = await listOutfits(20, nextCursor);
+            setOutfits(prev => [...prev, ...items]);
+            setNextCursor(newCursor);
+            setHasMore(newCursor !== null);
+        } catch (error: any) {
+             const errorMessage = error.message || "An unknown error occurred while loading more outfits.";
+             console.error("Failed to load more outfits:", error);
+             showToast("Could not load more outfits.", 'error');
+        } finally {
+            setIsLoadingOutfits(false);
+        }
+    }, [hasMore, isLoadingOutfits, nextCursor, showToast]);
+
 
     useEffect(() => {
         initializeCloset();
@@ -230,7 +252,6 @@ const AppContent: React.FC = () => {
                 onUpdateOutfit={handleUpdateOutfit}
                 onDeleteOutfit={handleDeleteOutfit}
                 isLoading={isLoadingOutfits}
-                // FIX: Pass error state and retry handler to the MyOutfitsPage component.
                 error={closetError}
                 onRetry={initializeCloset}
                 avatar={avatar}
@@ -238,6 +259,8 @@ const AppContent: React.FC = () => {
                 isDevMode={isDevMode}
                 setSelectedOutfit={setSelectedOutfit}
                 dripScore={dripScore}
+                loadMoreOutfits={loadMoreOutfits}
+                hasMore={hasMore}
             />
         ),
         ava: (
@@ -250,8 +273,7 @@ const AppContent: React.FC = () => {
                 onNavigate={handleNavigate}
             />
         ),
-    // FIX: Add closetError and initializeCloset to the dependency array.
-    }), [user, viewedUserId, outfits, isLoadingOutfits, avatar, isDevMode, setAvatar, setSelectedOutfit, handleNavigate, handleOutfitSaved, dripScore, showToast, handleUpdateOutfit, handleDeleteOutfit, closetError, initializeCloset]);
+    }), [user, viewedUserId, outfits, isLoadingOutfits, avatar, isDevMode, setAvatar, setSelectedOutfit, handleNavigate, handleOutfitSaved, dripScore, showToast, handleUpdateOutfit, handleDeleteOutfit, closetError, initializeCloset, loadMoreOutfits, hasMore]);
 
     if (!ready || loading) {
         return <FullScreenLoader text={!ready ? "Booting up..." : "Loading Profile..."} />;

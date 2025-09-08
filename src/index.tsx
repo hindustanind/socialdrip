@@ -2,6 +2,10 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 
+// Add global error handlers for better debugging.
+window.addEventListener("unhandledrejection", (e) => console.error("[UNHANDLED PROMISE REJECTION]", e.reason));
+window.addEventListener("error", (e) => console.error("[GLOBAL WINDOW ERROR]", e.message, e.error));
+
 const rootElement = document.getElementById('root');
 if (!rootElement) {
   throw new Error("Could not find root element to mount to");
@@ -9,11 +13,12 @@ if (!rootElement) {
 
 const root = ReactDOM.createRoot(rootElement);
 root.render(
-  <App />
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
 );
 
 // Register Service Worker for PWA functionality
-/*
 if ('serviceWorker' in navigator && window.isSecureContext) {
   // Prevent registration in cross-origin iframes to avoid security errors.
   let isSafeToRegister = true;
@@ -45,4 +50,3 @@ if ('serviceWorker' in navigator && window.isSecureContext) {
     });
   }
 }
-*/

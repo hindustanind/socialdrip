@@ -1,4 +1,4 @@
-import { supabase } from "./supabaseClient";
+import { supabase } from "../lib/supa";
 
 // Tiny helper to race a promise with a timeout
 function withTimeout<T>(p: Promise<T>, ms = 1500) {
@@ -21,9 +21,6 @@ export async function fastLogout(options?: { onLocalClear?: () => void; onNaviga
 
     // 3) Extra cleanup (best-effort; safe if the keys don't exist)
     try {
-      // Legacy profile data
-      localStorage.removeItem('dripsocial-local-profile');
-      
       // From user prompt
       localStorage.removeItem("closet_items");
       localStorage.removeItem("closet_migrated");

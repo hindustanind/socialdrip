@@ -25,23 +25,26 @@ const ProfileHeader: React.FC<ProfileHeaderProps> = ({ user, onUpdateProfile, on
     fileInputRef.current?.click();
   };
 
-  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      if (file.size > 2 * 1024 * 1024) { // 2MB limit
-          alert('Image is too large. Please select an image under 2MB.');
-          return;
-      }
-      setIsUploading(true);
-      setError(null);
-      try {
+  const handleFileChange: React.ChangeEventHandler<HTMLInputElement> = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploading(true);
+    setError(null);
+    try {
+        if (file.size > 2 * 1024 * 1024) { // 2MB limit
+            throw new Error('Image is too large. Please select an image under 2MB.');
+        }
         await onUpdateAvatar(file);
-      } catch (err: any) {
-        console.error("Failed to upload avatar", err);
-        setError(err.message || 'Failed to upload avatar.');
-      } finally {
+    } catch (error) {
+        console.error("[UI][AVATAR_ERROR]", error);
+        const errorMessage = (error as any)?.message ?? "Avatar upload failed";
+        setError(errorMessage);
+        alert(errorMessage);
+    } finally {
         setIsUploading(false);
-      }
+        // Always reset the input value to allow re-selecting the same file after a failure
+        e.currentTarget.value = "";
     }
   };
 
@@ -96,7 +99,7 @@ const ProfileHeader: React.FC<ProfileHeaderProps> = ({ user, onUpdateProfile, on
         {/* Profile Info */}
         <div className="flex-grow text-center md:text-left">
           <h1 className="text-3xl font-bold">{user.displayName ?? user.username}</h1>
-          <p className="text-md text-cyan-400 opacity-80">@{user.username}</p>
+          <p className="text-sm text-gray-400">@{user.username}</p>
           <p className="text-gray-300 italic mt-4">"{user.styleSignature || 'No style signature set.'}"</p>
           {isOwnProfile && <Button onClick={() => setIsEditing(true)} variant="secondary" className="mt-4 px-4 py-1 text-sm">Edit Profile</Button>}
         </div>

@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Outfit, Avatar, OutfitCategory } from '../../types';
 import CategoryFilter from './CategoryFilter';
@@ -70,9 +71,11 @@ interface MyOutfitsPageProps {
     isDevMode: boolean;
     setSelectedOutfit: (outfit: Outfit | null) => void;
     dripScore: number;
+    loadMoreOutfits: () => void;
+    hasMore: boolean;
 }
 
-const MyOutfitsPage: React.FC<MyOutfitsPageProps> = ({ outfits, onUpdateOutfit, onDeleteOutfit, isLoading, error, onRetry, avatar, setAvatar, isDevMode, setSelectedOutfit, dripScore }) => {
+const MyOutfitsPage: React.FC<MyOutfitsPageProps> = ({ outfits, onUpdateOutfit, onDeleteOutfit, isLoading, error, onRetry, avatar, setAvatar, isDevMode, setSelectedOutfit, dripScore, loadMoreOutfits, hasMore }) => {
     const [activeCategory, setActiveCategory] = useState<OutfitCategory>(OutfitCategory.ALL);
     const [view, setView] = useState<'closet' | 'dressingRoom'>('closet');
     const [displayedView, setDisplayedView] = useState(view);
@@ -92,6 +95,7 @@ const MyOutfitsPage: React.FC<MyOutfitsPageProps> = ({ outfits, onUpdateOutfit, 
     const [dressingRoomError, setDressingRoomError] = useState<string | null>(null);
 
     const outfitGridRef = useRef<HTMLDivElement>(null);
+    const loaderRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         if (view !== displayedView) {
@@ -103,6 +107,30 @@ const MyOutfitsPage: React.FC<MyOutfitsPageProps> = ({ outfits, onUpdateOutfit, 
             return () => clearTimeout(timer);
         }
     }, [view, displayedView]);
+    
+    useEffect(() => {
+        if (!hasMore || isLoading || view !== 'closet') return;
+        const observer = new IntersectionObserver(
+            ([entry]) => {
+                if (entry.isIntersecting) {
+                    loadMoreOutfits();
+                }
+            },
+            { rootMargin: "400px" }
+        );
+
+        const currentLoader = loaderRef.current;
+        if (currentLoader) {
+            observer.observe(currentLoader);
+        }
+
+        return () => {
+            if (currentLoader) {
+                observer.unobserve(currentLoader);
+            }
+        };
+    }, [hasMore, isLoading, loadMoreOutfits, view]);
+
 
     const filteredOutfits = useMemo(() => {
         if (activeCategory === OutfitCategory.FAVORITES) {
@@ -231,7 +259,7 @@ const MyOutfitsPage: React.FC<MyOutfitsPageProps> = ({ outfits, onUpdateOutfit, 
     }, [faceImage, selectedPresetPoseId, handleGenerateTryOn]);
 
     const renderClosetContent = () => {
-        if (isLoading) {
+        if (isLoading && outfits.length === 0) {
             return (
                 <div className="flex justify-center items-center min-h-[400px]">
                     <Spinner text="Loading your closet..." />
@@ -274,9 +302,14 @@ const MyOutfitsPage: React.FC<MyOutfitsPageProps> = ({ outfits, onUpdateOutfit, 
                             ))}
                         </div>
                     ) : (
-                        <EmptyClosetPlaceholder />
+                        !isLoading && <EmptyClosetPlaceholder />
                     )}
                 </div>
+                {hasMore && (
+                    <div ref={loaderRef} className="flex justify-center items-center h-20">
+                        {isLoading && <Spinner text="Loading more..." />}
+                    </div>
+                )}
             </div>
         );
     };

@@ -36,7 +36,7 @@ const RotatingOutfitCard: React.FC<{ outfit: Outfit; onClick: () => void; }> = (
             onKeyDown={(e) => { if (e.key === 'Enter') onClick(); }}
         >
             <img
-                src={`data:image/png;base64,${outfit.images[currentIndex]}`} // Use currentIndex
+                src={outfit.images[currentIndex]} // Use currentIndex
                 alt={outfit.name || 'User saved outfit'}
                 className="relative z-[1] h-full w-full object-cover"
                 draggable="false"

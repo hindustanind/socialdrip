@@ -27,7 +27,7 @@ export async function fastLogout(options?: { onLocalClear?: () => void; onNaviga
       localStorage.removeItem("sb-access-token");
       localStorage.removeItem("sb-refresh-token");
 
-      // From existing app logic in AuthContext (excluding localProfile which is handled by its hook)
+      // From existing app logic in AuthContext
       localStorage.removeItem('dripsocial-dripscore');
       localStorage.removeItem('dripsocial-last-welcome-toast');
       localStorage.removeItem('dripsocial-ava-tone');

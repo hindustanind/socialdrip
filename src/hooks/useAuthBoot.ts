@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '../services/supabaseClient';
+import { supabase } from '../lib/supa';
 import type { Session } from '@supabase/gotrue-js';
 import { isLogoutFlagSet } from '../services/logoutFlag';
 

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { supabase } from '../services/supabaseClient';
+import { supabase } from '../lib/supa';
 
 const RESERVED = new Set(['admin','support','root','null','undefined']);
 const norm = (s: string) => s.trim().toLowerCase().replace(/__+/g,'_');
@@ -52,10 +52,9 @@ export function useAuthForms() {
     if (!loginEmail || !loginPassword) { setLoginError('Please fill all fields.'); return; }
     setLoginLoading(true);
     try {
-      // FIX: Cast to 'any' to bypass TypeScript error, likely from a dependency version mismatch.
-      const { error } = await (supabase.auth as any).signInWithPassword({ email: loginEmail, password: loginPassword });
+      const { error } = await supabase.auth.signInWithPassword({ email: loginEmail, password: loginPassword });
       if (error) throw error;
-      // No redirect needed, state change will handle it.
+      // No redirect needed, onAuthStateChange listener handles success.
     } catch (e: any) {
       setLoginError(e?.message || 'Login failed. Please try again.');
     } finally { setLoginLoading(false); }
@@ -67,7 +66,7 @@ export function useAuthForms() {
     const lowercasedUsername = trimmedUsername.toLowerCase();
 
     if (!email || !password || !lowercasedUsername) {
-      setSignupError('Please fill all fields (username/email/password).');
+      setSignupError('Please fill all fields.');
       return;
     }
     if (uStatus !== 'ok') {
@@ -76,32 +75,21 @@ export function useAuthForms() {
     }
     setSignupLoading(true);
     try {
-      // FIX: Cast to 'any' to bypass TypeScript error, likely from a dependency version mismatch.
-      const { data, error: signUpError } = await (supabase.auth as any).signUp({
+      const { error } = await supabase.auth.signUp({
         email,
         password,
+        options: {
+            data: {
+                username: lowercasedUsername,
+                display_name: trimmedUsername, // Default display name to username
+            }
+        }
       });
 
-      if (signUpError) {
-        throw signUpError;
-      }
-
-      const user = data.user;
-      if (!user) {
-        throw new Error('Sign up succeeded but no user was returned.');
-      }
-
-      const { error: insertError } = await supabase
-        .from('profiles')
-        .insert({ id: user.id, username: lowercasedUsername, display_name: trimmedUsername });
-
-      if (insertError) {
-        if ((insertError as any).code === '23505') {
-          throw new Error('Username already taken.');
-        }
-        throw insertError;
-      }
-      // No redirect needed, state change will handle it.
+      if (error) throw error;
+      
+      // Profile creation is handled by a Supabase trigger on the backend.
+      // No redirect needed, onAuthStateChange listener handles success.
     } catch (e: any) {
       setSignupError(e?.message || 'Sign up failed. Please try again.');
     } finally {

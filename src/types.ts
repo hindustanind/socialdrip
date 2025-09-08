@@ -16,6 +16,8 @@ export interface Outfit {
   tags?: string[];
   images: string[]; // Array of image URLs (e.g., compressed, signed URLs from storage)
   originalImages?: string[]; // Array of original high-quality image URLs
+  imagePaths?: string[]; // Raw storage paths for thumbnails/display images
+  originalImagePaths?: string[]; // Raw storage paths for original quality images
   category: OutfitCategory;
   createdAt: number;
   description?: string;
