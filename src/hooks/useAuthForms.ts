@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { supabase } from '../lib/supa';
+import { supabase } from '../services/supabaseClient';
 
 const RESERVED = new Set(['admin','support','root','null','undefined']);
 const norm = (s: string) => s.trim().toLowerCase().replace(/__+/g,'_');

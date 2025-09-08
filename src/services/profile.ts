@@ -1,130 +1,119 @@
-// FIX: Updated Supabase client import path.
-import { supabase } from '../lib/supa';
+import { supabase } from "./supabaseClient";
 import { User } from '../types';
+import { type User as AuthUser } from "@supabase/supabase-js";
 
-// Helper for dev-only logging
-const log = (op: string, payload?: any, err?: any) => {
-  if (process.env.NODE_ENV === 'production') return;
-  const errorPayload = err ? { code: err.code, msg: err.message } : null;
-  console.info(`%c[profileSvc] %c${op}`, 'color: #f400f4; font-weight: bold;', 'color: inherit;', payload || '', errorPayload || '');
-};
-
-/** Fetches the full user profile for the currently authenticated user. */
-export async function fetchMyProfile(): Promise<User | null> {
-    const { data: { user: authUser } } = await (supabase.auth as any).getUser();
-    if (!authUser) return null;
-
-    log('fetchMyProfile', { userId: authUser.id });
-    const { data: profileData, error } = await supabase
-        .from('profiles')
-        .select('id, username, display_name, avatar_path, style_signature')
-        .eq('id', authUser.id)
-        .single();
-
-    if (error && error.code !== 'PGRST116') { // PGRST116 = no rows found
-        log('fetchMyProfile FAILED', { userId: authUser.id }, error);
-        throw error;
-    }
-
-    // Sync from auth if profile is missing (first login)
-    if (!profileData) {
-        return syncFromAuth(authUser);
-    }
-    
-    const avatarUrl = profileData.avatar_path ? getAvatarUrl(profileData.avatar_path) : null;
-    
-    return {
-        id: profileData.id,
-        username: profileData.username,
-        displayName: profileData.display_name,
-        profilePicture: avatarUrl,
-        styleSignature: profileData.style_signature,
-    };
+function extFromName(name?: string) {
+  const ext = name?.split(".").pop()?.toLowerCase();
+  return ext && ext.length <= 5 ? ext : "png";
 }
 
-/** 
- * Creates a profile entry based on auth data. 
- * This is typically for the very first time a user logs in.
- */
-export async function syncFromAuth(authUser: any): Promise<User> {
-    log('syncFromAuth', { authUser });
-    const { data, error } = await supabase
-        .from('profiles')
-        .select('username')
-        .eq('id', authUser.id)
-        .single();
-
-    if (error && error.code !== 'PGRST116') throw error;
-    
-    // If profile exists, we don't need to sync. This is a safeguard.
-    if (data) {
-        log('syncFromAuth SKIPPED', { reason: 'Profile already exists' });
-        const profile = await fetchMyProfile();
-        if (!profile) throw new Error("Profile disappeared after sync check");
-        return profile;
-    }
-    
-    const newProfile = {
-        id: authUser.id,
-        username: authUser.user_metadata?.username || authUser.email.split('@')[0],
-        display_name: authUser.user_metadata?.username || authUser.email.split('@')[0],
-    };
-    
-    await upsertMyProfile(newProfile);
-
-    return {
-        id: newProfile.id,
-        username: newProfile.username,
-        displayName: newProfile.display_name,
-        profilePicture: null,
-        styleSignature: null,
-    };
+async function getUserOrThrow(): Promise<AuthUser> {
+  const { data, error } = await supabase.auth.getUser();
+  if (error) throw new Error(`auth.getUser error: ${error.message}`);
+  const user = data?.user;
+  if (!user?.id) throw new Error("No authenticated user.");
+  return user;
 }
 
-/** Updates the profile for the currently authenticated user. */
-export async function upsertMyProfile(updates: Partial<{ display_name: string; style_signature: string; avatar_path: string; username: string; }>) {
-    const { data: { user } } = await (supabase.auth as any).getUser();
-    if (!user) throw new Error('User not authenticated for profile update.');
+export async function uploadProfileAvatar(file: File): Promise<{ publicUrl: string }> {
+  if (!file) throw new Error("No file provided.");
+  if (!file.type?.startsWith("image/")) {
+    throw new Error(`Invalid content type: ${file.type || "unknown"}`);
+  }
 
-    const payload = {
-        ...updates,
-        id: user.id,
-        updated_at: new Date().toISOString(),
-    };
-    log('upsertMyProfile', payload);
-    const { error } = await supabase.from('profiles').upsert(payload);
-    if (error) {
-        log('upsertMyProfile FAILED', payload, error);
-        throw error;
-    }
-}
+  const user = await getUserOrThrow();
+  const objectKey = `${user.id}/avatar-${Date.now()}.${extFromName(file.name)}`;
 
-/** Uploads an avatar file and updates the user's profile with the path. */
-export async function uploadAvatar(file: File): Promise<{ path: string }> {
-    const { data: { user } } = await (supabase.auth as any).getUser();
-    if (!user) throw new Error('User not authenticated for avatar upload.');
-    
-    const fileExt = file.name.split('.').pop();
-    const path = `${user.id}/avatar.${fileExt}`;
+  console.log("[AVATAR] Uploading:", { userId: user.id, path: objectKey, type: file.type });
 
-    log('uploadAvatar:upload', { path });
-    const { error: uploadError } = await supabase.storage.from('avatars').upload(path, file, {
-        upsert: true, // Overwrite existing avatar
+  const { data: uploadData, error: uploadErr } = await supabase.storage
+    .from("avatars")
+    .upload(objectKey, file, {
+      cacheControl: "3600",
+      upsert: false, // Per request, fails if object exists. Path includes timestamp to prevent this.
+      contentType: file.type,
     });
 
-    if (uploadError) {
-        log('uploadAvatar:upload FAILED', { path }, uploadError);
-        throw uploadError;
-    }
+  if (uploadErr) {
+    console.error("[AVATAR][UPLOAD_ERR]", uploadErr);
+    throw new Error(`Storage upload failed: ${uploadErr.message}`);
+  }
+  
+  const { error: upsertErr } = await supabase
+    .from("profiles")
+    .upsert({ id: user.id, avatar_path: objectKey, updated_at: new Date().toISOString() });
 
-    await upsertMyProfile({ avatar_path: path });
-    return { path };
+  if (upsertErr) {
+    console.error("[AVATAR][UPSERT_ERR]", upsertErr);
+    await supabase.storage.from("avatars").remove([objectKey]); // Clean up orphaned storage object
+    throw new Error(`Profile update after upload failed: ${upsertErr.message}`);
+  }
+
+  const { data: { publicUrl } } = supabase.storage.from("avatars").getPublicUrl(objectKey);
+  
+  if (!publicUrl) {
+      throw new Error("Could not get public URL for avatar after upload.");
+  }
+  
+  console.log("[AVATAR][SUCCESS]", { publicUrl });
+  return { publicUrl };
 }
 
-/** Gets the public URL for an avatar from its storage path. */
-export function getAvatarUrl(path: string): string | null {
-    if (!path) return null;
-    const { data } = supabase.storage.from('avatars').getPublicUrl(path);
-    log('getAvatarURL', { path, publicUrl: data.publicUrl });
-    return data.publicUrl;
+export async function loadProfile(): Promise<User | null> {
+  const user = await getUserOrThrow();
+
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("username, display_name, avatar_path, style_signature")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  if (error) {
+    console.error("[PROFILE][SELECT_ERR]", error);
+    throw new Error(`Profile select failed: ${error.message}`);
+  }
+  
+  if (!data) {
+      console.warn("[PROFILE] No profile found for user. This should not happen after signup.", { userId: user.id });
+      return null;
+  }
+
+  let avatarUrl: string | null = null;
+  if (data.avatar_path) {
+    const { data: pub } = supabase.storage.from("avatars").getPublicUrl(data.avatar_path);
+    avatarUrl = pub?.publicUrl || null;
+  }
+  
+  const profile: User = {
+    id: user.id,
+    username: data.username,
+    displayName: data.display_name,
+    profilePicture: avatarUrl,
+    styleSignature: data.style_signature,
+  };
+  
+  return profile;
+}
+
+export async function updateProfileData(updates: {
+  displayName?: string;
+  styleSignature?: string;
+}) {
+  const user = await getUserOrThrow();
+  const payload: { id: string; display_name?: string; style_signature?: string, updated_at: string } = {
+    id: user.id,
+    updated_at: new Date().toISOString(),
+  };
+
+  if (updates.displayName !== undefined) payload.display_name = updates.displayName;
+  if (updates.styleSignature !== undefined) payload.style_signature = updates.styleSignature;
+  
+  if (Object.keys(payload).length <= 2) return; // Nothing to update
+
+  const { error } = await supabase.from("profiles").upsert(payload);
+
+  if (error) {
+    console.error("[PROFILE][UPDATE_ERR]", error);
+    throw new Error(`Profile update failed: ${error.message}`);
+  }
 }

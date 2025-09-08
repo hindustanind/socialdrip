@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { getSignedUrl } from '../../lib/outfits';
+import { getSignedUrl } from '../../services/outfits';
 
 interface SignedImgProps extends React.ImgHTMLAttributes<HTMLImageElement> {
   path: string;

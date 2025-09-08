@@ -1,7 +1,7 @@
 import React, { createContext, useContext, ReactNode, useState, useEffect, useCallback, useMemo } from 'react';
 import { User } from '../types';
-import { supabase } from '../lib/supa';
-import { loadProfile, updateProfileData, uploadProfileAvatar } from '../lib/profile';
+import { supabase } from '../services/supabaseClient';
+import { loadProfile, updateProfileData, uploadProfileAvatar } from '../services/profile';
 import { profiler } from '../dev/logoutProfiler';
 
 interface AuthContextType {

@@ -13,7 +13,7 @@ import OutfitDetailModal from './components/myOutfits/OutfitDetailModal';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import LoginPage from './components/auth/LoginPage';
 import Spinner from './components/shared/Spinner';
-import { listOutfits, createOutfit, deleteOutfit, updateOutfit } from './lib/outfits';
+import { listOutfits, createOutfit, deleteOutfit, updateOutfit } from './services/outfits';
 import ConnectivityProbes from './components/ConnectivityProbes';
 import { installPurgeCacheUtil } from './dev/purgeCache';
 
