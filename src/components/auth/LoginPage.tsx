@@ -1,9 +1,28 @@
 import React, { useEffect } from 'react';
 import ImageCarouselColumn from './ImageCarouselColumn';
 import AuthCard from './AuthCard';
+import { clearLogoutFlag } from '../../services/logoutFlag';
+import { useAuth } from '../../contexts/AuthContext';
+
+// Dev-only profiler import
+import { profiler } from "../../dev/logoutProfiler";
 
 const LoginPage: React.FC = () => {
+    const { isLoggingOut, setIsLoggingOut } = useAuth();
+
     useEffect(() => {
+        // Mark the final step of the logout profiling sequence.
+        if (process.env.NODE_ENV !== 'production') {
+            profiler.markLoginMounted();
+        }
+
+        // When the login page mounts, the logout process is considered complete.
+        // This clears the session flag and tells the AuthContext to remove the overlay.
+        clearLogoutFlag();
+        if (isLoggingOut) {
+            setIsLoggingOut(false);
+        }
+
         const preventDefault = (e: Event) => e.preventDefault();
         
         document.addEventListener('contextmenu', preventDefault);
@@ -15,6 +34,7 @@ const LoginPage: React.FC = () => {
             document.removeEventListener('dblclick', preventDefault);
             document.removeEventListener('dragstart', preventDefault);
         };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     return (

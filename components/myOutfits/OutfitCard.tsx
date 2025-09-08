@@ -1,5 +1,4 @@
 
-
 import React, { useState, useRef, useEffect } from 'react';
 import { Outfit } from '../../types';
 
@@ -22,7 +21,7 @@ const OutfitCard = React.memo<OutfitCardProps>(({ outfit, onToggleFavorite, onUp
     const [isRenaming, setIsRenaming] = useState(false);
     const [draftName, setDraftName] = useState(outfit.name || '');
     const [isMenuOpen, setIsMenuOpen] = useState(false);
-    const [isPressed, setIsPressed] = useState(false); // State for click feedback animation
+    const [isPressed, setIsPressed] = useState(false);
     
     const cardRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
@@ -39,7 +38,6 @@ const OutfitCard = React.memo<OutfitCardProps>(({ outfit, onToggleFavorite, onUp
         }
     }, [isRenaming]);
     
-    // Effect to handle closing the menu on outside clicks
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
             if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
@@ -73,7 +71,6 @@ const OutfitCard = React.memo<OutfitCardProps>(({ outfit, onToggleFavorite, onUp
         if (e.key === 'Enter' && !isRenaming) onViewDetail();
     };
     
-    // Clean up timer on unmount
     useEffect(() => {
         return () => {
             if (clickTimeoutRef.current) {
@@ -83,21 +80,18 @@ const OutfitCard = React.memo<OutfitCardProps>(({ outfit, onToggleFavorite, onUp
     }, []);
 
     const handleCardClick = () => {
-        // Trigger press animation for immediate feedback
         setIsPressed(true);
         setTimeout(() => setIsPressed(false), 150);
 
-        // If a timer is already set, it's a double click
         if (clickTimeoutRef.current) {
             clearTimeout(clickTimeoutRef.current);
             clickTimeoutRef.current = null;
             onToggleFavorite();
         } else {
-            // Set a timer for a single click
             clickTimeoutRef.current = window.setTimeout(() => {
                 onViewDetail();
                 clickTimeoutRef.current = null;
-            }, 250); // 250ms delay to wait for a potential second click
+            }, 250);
         }
     };
 
@@ -133,10 +127,11 @@ const OutfitCard = React.memo<OutfitCardProps>(({ outfit, onToggleFavorite, onUp
             aria-label={outfitName}
         >
             <img
-                src={`data:image/png;base64,${outfit.images[0]}`}
+                src={outfit.images[0]}
                 alt={outfitName}
                 className="relative z-[1] w-full h-full object-cover transition-opacity duration-200 rounded-lg"
                 draggable="false"
+                loading="lazy"
             />
             
             <div className="absolute inset-0 bg-black/50 transition-opacity duration-300 opacity-0 group-hover:opacity-100 rounded-lg z-[2]" />

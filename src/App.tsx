@@ -1,6 +1,5 @@
-
-
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import Header from './components/myOutfits/Header';
 import HomePage from './components/home/HomePage';
 import OutfitGeneratorPage from './components/outfitGenerator/OutfitGeneratorPage';
@@ -14,7 +13,6 @@ import OutfitDetailModal from './components/myOutfits/OutfitDetailModal';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import LoginPage from './components/auth/LoginPage';
 import Spinner from './components/shared/Spinner';
-import { useAuthBoot } from './hooks/useAuthBoot';
 import { migrateLocalCloset, listOutfits, createOutfit, deleteOutfit, updateOutfit } from './services/outfits';
 
 type Page = 'home' | 'generator' | 'closet' | 'ava' | 'profile';
@@ -28,23 +26,24 @@ interface BeforeInstallPromptEvent extends Event {
   prompt(): Promise<void>;
 }
 
-const FullScreenLoader: React.FC<{ text?: string }> = ({ text = 'Loading...' }) => (
-    <div className="fixed inset-0 bg-[#0a0118] flex items-center justify-center z-[9999]">
-        <Spinner text={text} />
-    </div>
-);
+const FullScreenLoader: React.FC<{ text?: string }> = ({ text = 'Loading...' }) => {
+    return createPortal(
+        <div className="fixed inset-0 bg-[#0a0118] flex items-center justify-center z-[2147483647] will-change-opacity">
+            <Spinner text={text} />
+        </div>,
+        document.body
+    );
+};
 
 const AppContent: React.FC = () => {
-    const { ready } = useAuthBoot();
-    const { user, loading } = useAuth();
+    const { user, loading, isLoggingOut } = useAuth();
     const [currentPage, setCurrentPage] = useState<Page>('home');
-    const previousUserRef = useRef(user); // Track previous user state
+    const previousUserRef = useRef(user);
 
     const [viewedUserId, setViewedUserId] = useState<string | null>(null);
 
     const [outfits, setOutfits] = useState<Outfit[]>([]);
     const [isLoadingOutfits, setIsLoadingOutfits] = useState(true);
-    // FIX: Add state for closet loading errors.
     const [closetError, setClosetError] = useState<string | null>(null);
     const [avatar, setAvatar] = useLocalStorage<Avatar | null>('dripsocial-avatar', null);
     const [dripScore, setDripScore] = useLocalStorage<number>('dripsocial-dripscore', 0);
@@ -63,12 +62,23 @@ const AppContent: React.FC = () => {
     const [isInitialLogin, setIsInitialLogin] = useState(false);
     const [lastWelcomeToastDate, setLastWelcomeToastDate] = useLocalStorage<string | null>('dripsocial-last-welcome-toast', null);
     
+    useEffect(() => {
+        const isOverlayActive = loading || isLoggingOut;
+        if (isOverlayActive) {
+            document.documentElement.style.overflow = 'hidden';
+        } else {
+            document.documentElement.style.overflow = '';
+        }
+        return () => {
+            document.documentElement.style.overflow = '';
+        };
+    }, [loading, isLoggingOut]);
+    
     const showToast = useCallback((message: string, type: 'info' | 'error' = 'info', duration = 8000) => {
         setToast({ message, visible: true, type });
         setTimeout(() => setToast(prev => ({ ...prev, visible: false })), duration);
     }, []);
     
-    // FIX: Abstract closet initialization to a memoized function for retries and pass it down.
     const initializeCloset = useCallback(async () => {
         if (!user) {
             setOutfits([]);
@@ -86,7 +96,7 @@ const AppContent: React.FC = () => {
             const errorMessage = error.message || "An unknown error occurred while loading your closet.";
             console.error("Failed to initialize closet:", error);
             setClosetError(errorMessage);
-            setOutfits([]); // Ensure outfits is empty on error
+            setOutfits([]);
             showToast("Could not load your closet.", 'error');
         } finally {
             setIsLoadingOutfits(false);
@@ -230,7 +240,6 @@ const AppContent: React.FC = () => {
                 onUpdateOutfit={handleUpdateOutfit}
                 onDeleteOutfit={handleDeleteOutfit}
                 isLoading={isLoadingOutfits}
-                // FIX: Pass error state and retry handler to the MyOutfitsPage component.
                 error={closetError}
                 onRetry={initializeCloset}
                 avatar={avatar}
@@ -250,11 +259,10 @@ const AppContent: React.FC = () => {
                 onNavigate={handleNavigate}
             />
         ),
-    // FIX: Add closetError and initializeCloset to the dependency array.
     }), [user, viewedUserId, outfits, isLoadingOutfits, avatar, isDevMode, setAvatar, setSelectedOutfit, handleNavigate, handleOutfitSaved, dripScore, showToast, handleUpdateOutfit, handleDeleteOutfit, closetError, initializeCloset]);
 
-    if (!ready || loading) {
-        return <FullScreenLoader text={!ready ? "Booting up..." : "Loading Profile..."} />;
+    if (loading || isLoggingOut) {
+        return <FullScreenLoader text={isLoggingOut ? "Logging out..." : "Booting up..."} />;
     }
 
     if (!user) {

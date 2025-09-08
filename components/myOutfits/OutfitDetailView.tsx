@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Outfit, User } from '../../types';
 import OutfitViewer from '../outfitGenerator/OutfitViewer';
@@ -33,45 +34,63 @@ const OutfitDetailView: React.FC<OutfitDetailViewProps> = ({ outfit, isDevMode, 
         return;
       }
       
-      // Fallback for older outfits without a saved description
-      if (outfit.isMock) {
-        setDescription(`This is a mock description for a stylish ${outfit.category} outfit, generated in Developer Mode. Based on your style profile ("${currentUser.styleSignature}"), I'd suggest pairing this with some minimalist jewelry to really let the main pieces shine. Perfect for a chic city adventure!`);
+      if (isDevMode || !geminiService.isApiKeySet()) {
+        setDescription(`This is a mock description for a stylish ${outfit.category} outfit. Based on your style profile ("${currentUser.styleSignature}"), I'd suggest pairing this with some minimalist jewelry.`);
         setIsLoading(false);
       } else {
         try {
-          const desc = await geminiService.generateStylingTips(
-              outfit.images[0],
-              outfit.category,
-              currentUser.styleSignature || '',
-              currentUser.displayName || 'friend'
-          );
-          setDescription(desc);
+          const firstImage = outfit.originalImages?.[0] || outfit.images[0];
+          // Since the firstImage is now a URL, we need to fetch and convert it to base64 for the API
+          const response = await fetch(firstImage);
+          const blob = await response.blob();
+          const reader = new FileReader();
+          reader.readAsDataURL(blob);
+          reader.onloadend = async () => {
+              const base64data = (reader.result as string).split(',')[1];
+              const desc = await geminiService.generateStylingTips(
+                  base64data,
+                  outfit.category,
+                  currentUser.styleSignature || '',
+                  currentUser.displayName || 'friend'
+              );
+              setDescription(desc);
+              setIsLoading(false);
+          };
         } catch (error) {
           console.error("Failed to fetch outfit description:", error);
           const errorMessage = error instanceof geminiService.QuotaExceededError
             ? "So many amazing styles! You've reached the daily limit for new styling tips. Please check back tomorrow!"
             : "Could not load styling tips at the moment.";
           setDescription(errorMessage);
-        } finally {
           setIsLoading(false);
         }
       }
     };
     fetchDescription();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [outfit, isDevMode, currentUser]);
 
   const imagesForDisplay = outfit.images;
   const imagesForDownload = outfit.originalImages || outfit.images;
 
-  const handleDownloadImage = (imageIndex: number, angle: string) => {
-    const imageUrl = imagesForDownload[imageIndex];
-    const link = document.createElement('a');
-    link.href = `data:image/png;base64,${imageUrl}`;
-    link.download = `DripSocial-Outfit-${angle.replace(/\s+/g, '-')}.png`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  const handleDownloadImage = async (imageIndex: number, angle: string) => {
+    try {
+        const imageUrl = imagesForDownload[imageIndex];
+        const response = await fetch(imageUrl);
+        if (!response.ok) throw new Error('Failed to fetch image for download.');
+        const blob = await response.blob();
+        const objectUrl = URL.createObjectURL(blob);
+        
+        const link = document.createElement('a');
+        link.href = objectUrl;
+        link.download = `DripSocial-Outfit-${angle.replace(/\s+/g, '-')}.png`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(objectUrl);
+    } catch (error) {
+        console.error('Download failed:', error);
+        alert('Could not download image. Please try again.');
+    }
   };
   
   const handleShare = async () => {
@@ -81,9 +100,8 @@ const OutfitDetailView: React.FC<OutfitDetailViewProps> = ({ outfit, isDevMode, 
     }
 
     try {
-      const highQualityImage = imagesForDownload[0];
-      const dataUrl = `data:image/png;base64,${highQualityImage}`;
-      const response = await fetch(dataUrl);
+      const highQualityImageUrl = imagesForDownload[0];
+      const response = await fetch(highQualityImageUrl);
       const blob = await response.blob();
       const file = new File([blob], 'dripsocial-outfit.png', { type: 'image/png' });
 
@@ -98,18 +116,12 @@ const OutfitDetailView: React.FC<OutfitDetailViewProps> = ({ outfit, isDevMode, 
         return;
       }
 
-      // Use the Web Share API
       navigator.share(shareData)
         .then(() => {
-          // This promise resolves when the user successfully shares OR dismisses the share sheet.
-          // Due to browser privacy restrictions, we cannot distinguish between a successful share and a cancellation from the share dialog.
-          // We increment the score assuming the user's intent was to share.
           console.log('Share dialog dismissed.');
           onIncrementDripScore();
         })
         .catch((error) => {
-          // The promise rejects if the user cancels before the share sheet is shown (AbortError),
-          // or if there's an error with the data. We do NOT increment the score in this case.
           if (error instanceof DOMException && error.name === 'AbortError') {
             console.log('Share was aborted by the user.');
           } else {
@@ -118,7 +130,6 @@ const OutfitDetailView: React.FC<OutfitDetailViewProps> = ({ outfit, isDevMode, 
           }
         });
     } catch (error) {
-      // Catches errors from fetching/creating the image file.
       console.error('Error preparing share data:', error);
       alert('Could not prepare the image for sharing.');
     }

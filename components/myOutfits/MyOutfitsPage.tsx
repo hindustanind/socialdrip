@@ -1,4 +1,4 @@
-// FIX: Import useState, useEffect, useMemo, useCallback, and useRef from React.
+
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Outfit, Avatar, OutfitCategory } from '../../types';
 import CategoryFilter from './CategoryFilter';
@@ -7,18 +7,12 @@ import * as geminiService from '../../services/geminiService';
 import Spinner from '../shared/Spinner';
 import OutfitViewer from '../outfitGenerator/OutfitViewer';
 import Button from '../shared/Button';
-import GenerationLoader from '../outfitGenerator/GenerationLoader';
 import HeadshotUploader from './HeadshotUploader';
-import OutfitDeck from './OutfitDeck';
 import AvatarVideoPlayer from './AvatarVideoPlayer';
-import { fileToBase64 } from '../../utils';
 import PoseDeck from './PoseDeck';
 import { PRESET_POSES } from '../../presetPoses';
 import ImageCropper from '../outfitGenerator/ImageCropper';
 
-// --- INLINED COMPONENTS ---
-
-// Dressing Room Loader
 const DressingRoomLoader: React.FC = () => (
     <div className="flex flex-col items-center justify-center min-h-[calc(100vh-250px)] page-transition-enter">
         <div className="animate-swing-hanger" style={{filter: 'drop-shadow(0 0 10px #00f2ff)'}}>
@@ -44,7 +38,6 @@ const ComingSoonPlaceholder: React.FC = () => (
     </div>
 );
 
-// New Empty Closet Placeholder
 const EmptyClosetPlaceholder: React.FC = () => (
     <div className="relative text-center py-20 min-h-[400px] flex flex-col items-center justify-center overflow-hidden">
         <div className="absolute inset-0 flex items-center justify-center z-0 pointer-events-none">
@@ -65,12 +58,13 @@ const EmptyClosetPlaceholder: React.FC = () => (
     </div>
 );
 
-
-// --- MAIN COMPONENT ---
-
 interface MyOutfitsPageProps {
     outfits: Outfit[];
-    setOutfits: React.Dispatch<React.SetStateAction<Outfit[]>>;
+    onUpdateOutfit: (outfitId: string, updates: Partial<Outfit>) => Promise<void>;
+    onDeleteOutfit: (outfitId: string) => Promise<void>;
+    isLoading: boolean;
+    error: string | null;
+    onRetry: () => void;
     avatar: Avatar | null;
     setAvatar: (avatar: Avatar | null) => void;
     isDevMode: boolean;
@@ -78,26 +72,24 @@ interface MyOutfitsPageProps {
     dripScore: number;
 }
 
-const MyOutfitsPage: React.FC<MyOutfitsPageProps> = ({ outfits, setOutfits, avatar, setAvatar, isDevMode, setSelectedOutfit, dripScore }) => {
+const MyOutfitsPage: React.FC<MyOutfitsPageProps> = ({ outfits, onUpdateOutfit, onDeleteOutfit, isLoading, error, onRetry, avatar, setAvatar, isDevMode, setSelectedOutfit, dripScore }) => {
     const [activeCategory, setActiveCategory] = useState<OutfitCategory>(OutfitCategory.ALL);
     const [view, setView] = useState<'closet' | 'dressingRoom'>('closet');
     const [displayedView, setDisplayedView] = useState(view);
     const [animationClass, setAnimationClass] = useState('page-transition-enter');
 
-    const [error, setError] = useState<string | null>(null);
     const [dressingRoomImages, setDressingRoomImages] = useState<string[] | null>(null);
     const [wornOutfitId, setWornOutfitId] = useState<string | null>(null);
     const [isDressing, setIsDressing] = useState(false);
-    const [isGenerating360, setIsGenerating360] = useState(false);
     const [faceImage, setFaceImage] = useState<string | null>(null);
     const [isPreparingDressingRoom, setIsPreparingDressingRoom] = useState(false);
 
-    // Avatar creation state
     const [avatarCreationStep, setAvatarCreationStep] = useState<'upload' | 'cropping'>('upload');
     const [headshotFile, setHeadshotFile] = useState<File | null>(null);
     const [selectedPresetPoseId, setSelectedPresetPoseId] = useState<string | null>(null);
     const [isGeneratingTryOn, setIsGeneratingTryOn] = useState(false);
     const [tryOnResultImage, setTryOnResultImage] = useState<string | null>(null);
+    const [dressingRoomError, setDressingRoomError] = useState<string | null>(null);
 
     const outfitGridRef = useRef<HTMLDivElement>(null);
 
@@ -113,38 +105,27 @@ const MyOutfitsPage: React.FC<MyOutfitsPageProps> = ({ outfits, setOutfits, avat
     }, [view, displayedView]);
 
     const filteredOutfits = useMemo(() => {
-        const sorted = [...outfits].sort((a, b) => b.createdAt - a.createdAt);
         if (activeCategory === OutfitCategory.FAVORITES) {
-            return sorted.filter(o => o.isFavorite);
+            return outfits.filter(o => o.isFavorite);
         }
-        if (activeCategory === OutfitCategory.ALL) return sorted;
-        return sorted.filter(o => o.category === activeCategory);
+        if (activeCategory === OutfitCategory.ALL) return outfits;
+        return outfits.filter(o => o.category === activeCategory);
     }, [outfits, activeCategory]);
     
     const handleSwitchToDressingRoom = () => {
         if (view === 'dressingRoom' || isPreparingDressingRoom) return;
-
         setIsPreparingDressingRoom(true);
-
         setTimeout(() => {
             setView('dressingRoom');
             setIsPreparingDressingRoom(false);
-        }, 2000); // Show loader for 2 seconds
-    };
-
-    const handleUpdateOutfit = (id: string, updates: Partial<Outfit>) => {
-        setOutfits(prev => prev.map(o => o.id === id ? { ...o, ...updates } : o));
-    };
-    
-    const handleDeleteOutfit = (id: string) => {
-        setOutfits(prev => prev.filter(o => o.id !== id));
+        }, 2000);
     };
 
     const handleTryOnOutfit = useCallback(async (outfitToTryOn: Outfit) => {
         if (!avatar?.images || isDressing) return;
         setWornOutfitId(outfitToTryOn.id);
         setIsDressing(true);
-        setError(null);
+        setDressingRoomError(null);
         setDressingRoomImages([outfitToTryOn.images[0]]); 
 
         try {
@@ -158,7 +139,7 @@ const MyOutfitsPage: React.FC<MyOutfitsPageProps> = ({ outfits, setOutfits, avat
             const errorMessage = err instanceof geminiService.QuotaExceededError
                 ? "You've reached your try-on limit for today! Please come back tomorrow to see more amazing looks on your avatar."
                 : (err instanceof Error ? err.message : 'Failed to dress avatar.');
-            setError(errorMessage);
+            setDressingRoomError(errorMessage);
             if (avatar?.images) setDressingRoomImages(avatar.images);
             setWornOutfitId(null);
         } finally {
@@ -183,7 +164,7 @@ const MyOutfitsPage: React.FC<MyOutfitsPageProps> = ({ outfits, setOutfits, avat
         setHeadshotFile(null);
         setAvatarCreationStep('upload');
         setTryOnResultImage(null);
-        setError(null);
+        setDressingRoomError(null);
     };
 
     const handleHeadshotCrop = (croppedImageDataUrl: string) => {
@@ -200,8 +181,8 @@ const MyOutfitsPage: React.FC<MyOutfitsPageProps> = ({ outfits, setOutfits, avat
 
     const handleGenerateTryOn = useCallback(async (headshot: string, poseImageUrl: string) => {
         setIsGeneratingTryOn(true);
-        setError(null);
-        setTryOnResultImage(null); // Clear previous result
+        setDressingRoomError(null);
+        setTryOnResultImage(null);
         try {
             const poseImageB64 = await new Promise<string>((resolve, reject) => {
                 const img = new Image();
@@ -234,8 +215,7 @@ const MyOutfitsPage: React.FC<MyOutfitsPageProps> = ({ outfits, setOutfits, avat
             const errorMessage = err instanceof geminiService.QuotaExceededError
                 ? "You've reached your virtual try-on limit for today! Please come back tomorrow to generate more looks."
                 : (err instanceof Error ? err.message : 'Failed to generate try-on preview.');
-            setError(errorMessage);
-            console.error("Try-on generation failed:", err);
+            setDressingRoomError(errorMessage);
         } finally {
             setIsGeneratingTryOn(false);
         }
@@ -251,12 +231,28 @@ const MyOutfitsPage: React.FC<MyOutfitsPageProps> = ({ outfits, setOutfits, avat
     }, [faceImage, selectedPresetPoseId, handleGenerateTryOn]);
 
     const renderClosetContent = () => {
+        if (isLoading) {
+            return (
+                <div className="flex justify-center items-center min-h-[400px]">
+                    <Spinner text="Loading your closet..." />
+                </div>
+            );
+        }
+
+        if (error) {
+            return (
+                <div className="text-center py-20 min-h-[400px] flex flex-col items-center justify-center bg-red-500/10 border-2 border-dashed border-red-500/50 rounded-lg">
+                    <p className="text-xl text-red-300">Failed to load your closet</p>
+                    <p className="text-gray-400 mt-2 max-w-md">{error}</p>
+                    <Button onClick={onRetry} variant="secondary" className="mt-6">
+                        Retry
+                    </Button>
+                </div>
+            );
+        }
+
         return (
             <div>
-                {isDevMode && (
-                    <div className="flex justify-center items-center gap-4 mb-8">
-                    </div>
-                )}
                 <div>
                     {filteredOutfits.length > 0 ? (
                         <div ref={outfitGridRef} className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6" style={{ outline: 'none' }} tabIndex={-1}>
@@ -268,11 +264,11 @@ const MyOutfitsPage: React.FC<MyOutfitsPageProps> = ({ outfits, setOutfits, avat
                                 >
                                     <OutfitCard
                                         outfit={outfit}
-                                        onToggleFavorite={() => handleUpdateOutfit(outfit.id, { isFavorite: !outfit.isFavorite })}
-                                        onUpdate={(updates) => handleUpdateOutfit(outfit.id, updates)}
+                                        onToggleFavorite={() => onUpdateOutfit(outfit.id, { isFavorite: !outfit.isFavorite })}
+                                        onUpdate={(updates) => onUpdateOutfit(outfit.id, updates)}
                                         onTryOn={() => { handleSwitchToDressingRoom(); if(avatar) handleTryOnOutfit(outfit); }}
                                         onViewDetail={() => setSelectedOutfit(outfit)}
-                                        onDelete={() => handleDeleteOutfit(outfit.id)}
+                                        onDelete={() => onDeleteOutfit(outfit.id)}
                                     />
                                 </div>
                             ))}
@@ -309,7 +305,6 @@ const MyOutfitsPage: React.FC<MyOutfitsPageProps> = ({ outfits, setOutfits, avat
 
              return (
                 <div className="grid md:grid-cols-2 gap-8 h-[calc(100vh-12rem)] overflow-hidden">
-                    {/* --- LEFT COLUMN --- */}
                     <div className="flex flex-col items-center justify-start h-full gap-4 p-2">
                         <h3 className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-[#f400f4] to-[#00f2ff]">{leftPanelTitle}</h3>
                         <p className="text-sm text-gray-400 text-center mb-2 max-w-md">{leftPanelSubtitle}</p>
@@ -331,15 +326,12 @@ const MyOutfitsPage: React.FC<MyOutfitsPageProps> = ({ outfits, setOutfits, avat
                         </div>
                     </div>
 
-                    {/* --- RIGHT COLUMN --- */}
                     <div className="flex flex-col items-center h-full p-2">
-                        {/* Text part - aligned to top */}
                         <div className="text-center">
                             <h3 className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-[#f400f4] to-[#00f2ff]">Pick Your Outfit</h3>
                             <p className="text-sm text-gray-400 text-center mb-2 max-w-md">Select the clothing for your avatar from our preset styles. Your avatar's unique pose will be preserved.</p>
                         </div>
                         
-                        {/* This wrapper will grow to fill the remaining space and center the deck */}
                         <div className="w-full flex-grow flex items-center justify-center overflow-hidden relative">
                            <PoseDeck poses={PRESET_POSES} selectedId={selectedPresetPoseId} onSelect={setSelectedPresetPoseId} disabled={isGeneratingTryOn} size="large" />
                         </div>
@@ -359,7 +351,6 @@ const MyOutfitsPage: React.FC<MyOutfitsPageProps> = ({ outfits, setOutfits, avat
                         ) : (dressingRoomImages && dressingRoomImages.length > 0 ? (
                             <OutfitViewer
                                 images={dressingRoomImages}
-                                isGenerating360={isGenerating360}
                             />
                         ) : (
                             <div className="w-full h-full flex items-center justify-center text-gray-500">Avatar not available.</div>
@@ -395,7 +386,7 @@ const MyOutfitsPage: React.FC<MyOutfitsPageProps> = ({ outfits, setOutfits, avat
                                     }`}
                                 >
                                     <img
-                                        src={`data:image/jpeg;base64,${outfit.images[0]}`}
+                                        src={outfit.images[0]}
                                         alt={outfit.name || 'Outfit'}
                                         className="w-full h-full object-cover"
                                     />
@@ -412,8 +403,6 @@ const MyOutfitsPage: React.FC<MyOutfitsPageProps> = ({ outfits, setOutfits, avat
         );
     };
     
-    // When the animation is fading out the `closet` view after the loader,
-    // we want to show an empty div instead of the actual closet content to prevent a flicker.
     const isFadingOutClosetAfterLoader = animationClass === 'page-transition-exit' && view === 'dressingRoom' && displayedView === 'closet';
 
     return (
@@ -427,7 +416,6 @@ const MyOutfitsPage: React.FC<MyOutfitsPageProps> = ({ outfits, setOutfits, avat
                 <div
                     className="relative flex w-72 items-center bg-white/10 rounded-full p-1"
                 >
-                    {/* The sliding thumb/background */}
                     <div
                         className="absolute h-full w-1/2 top-0 p-1 transition-transform duration-300 ease-in-out"
                         style={{
@@ -437,7 +425,6 @@ const MyOutfitsPage: React.FC<MyOutfitsPageProps> = ({ outfits, setOutfits, avat
                         <div className="w-full h-full bg-gradient-to-r from-[#f400f4] to-[#00f2ff] rounded-full shadow-[0_0_10px_#f400f4]" />
                     </div>
                     
-                    {/* Button for Closet */}
                     <button
                         onClick={() => setView('closet')}
                         className={`relative z-10 flex-1 py-1.5 text-base font-semibold text-center transition-colors duration-300 ${
@@ -447,7 +434,6 @@ const MyOutfitsPage: React.FC<MyOutfitsPageProps> = ({ outfits, setOutfits, avat
                         Closet
                     </button>
 
-                    {/* Button for Dressing Room */}
                     <button
                         onClick={handleSwitchToDressingRoom}
                         className={`relative z-10 flex-1 py-1.5 text-base font-semibold text-center transition-colors duration-300 ${
@@ -480,13 +466,13 @@ const MyOutfitsPage: React.FC<MyOutfitsPageProps> = ({ outfits, setOutfits, avat
                 </div>
             </div>
 
-             {error && <div className="my-4 p-3 bg-red-500/20 border border-red-500 text-red-300 rounded-md text-sm text-center"><p>{error}</p></div>}
+             {view === 'dressingRoom' && dressingRoomError && <div className="my-4 p-3 bg-red-500/20 border border-red-500 text-red-300 rounded-md text-sm text-center"><p>{dressingRoomError}</p></div>}
             {isPreparingDressingRoom ? (
                 <DressingRoomLoader />
             ) : (
                 <div className={animationClass}>
                     {isFadingOutClosetAfterLoader ? (
-                        <div /> // Render an empty div to prevent the closet from flickering back into view
+                        <div />
                     ) : (
                         displayedView === 'closet' ? renderClosetContent() : renderDressingRoomContent()
                     )}

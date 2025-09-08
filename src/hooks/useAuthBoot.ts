@@ -1,18 +1,24 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../services/supabaseClient';
-// FIX: The 'Session' type may not be exported from the root of '@supabase/supabase-js' in some versions. Importing from the underlying '@supabase/gotrue-js' is more stable.
 import type { Session } from '@supabase/gotrue-js';
+import { isLogoutFlagSet } from '../services/logoutFlag';
 
 export function useAuthBoot() {
   const [session, setSession] = useState<Session | null>(null);
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
+    // If a logout is in progress, short-circuit the auth boot process.
+    // The app will render the LoginPage, which will clear the flag.
+    if (isLogoutFlagSet()) {
+      setReady(true);
+      return;
+    }
+
     async function getInitialSession() {
-      // FIX: Cast to 'any' to bypass TypeScript error, likely from a dependency version mismatch.
       const { data } = await (supabase.auth as any).getSession();
-      // This is to guard against a race condition where onAuthStateChange may fire before getSession resolves.
-      if (!session) {
+      // Guard against race conditions and the logout flag being set.
+      if (!session && !isLogoutFlagSet()) {
         setSession(data.session);
       }
       setReady(true);
@@ -20,8 +26,10 @@ export function useAuthBoot() {
 
     getInitialSession();
 
-    // FIX: Cast to 'any' to bypass TypeScript error, likely from a dependency version mismatch.
     const { data: { subscription } } = (supabase.auth as any).onAuthStateChange((_event: any, sessionState: Session | null) => {
+      // The check is removed here to allow SIGNED_OUT event to be processed
+      // during the logout flow. The initial check at the top of useEffect
+      // prevents re-authentication if the page is reloaded during logout.
       setSession(sessionState);
     });
 

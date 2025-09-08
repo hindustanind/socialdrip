@@ -63,7 +63,8 @@ export function useAuthForms() {
 
   async function createAccount() {
     setSignupError(null);
-    const lowercasedUsername = username.trim().toLowerCase();
+    const trimmedUsername = username.trim();
+    const lowercasedUsername = trimmedUsername.toLowerCase();
 
     if (!email || !password || !lowercasedUsername) {
       setSignupError('Please fill all fields (username/email/password).');
@@ -92,7 +93,7 @@ export function useAuthForms() {
 
       const { error: insertError } = await supabase
         .from('profiles')
-        .insert({ id: user.id, username: lowercasedUsername });
+        .insert({ id: user.id, username: lowercasedUsername, display_name: trimmedUsername });
 
       if (insertError) {
         if ((insertError as any).code === '23505') {

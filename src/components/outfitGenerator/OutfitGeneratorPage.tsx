@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { Outfit, OutfitCategory } from '../../types';
 import * as geminiService from '../../services/geminiService';

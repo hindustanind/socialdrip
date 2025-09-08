@@ -96,6 +96,7 @@ const ProfileHeader: React.FC<ProfileHeaderProps> = ({ user, onUpdateProfile, on
         {/* Profile Info */}
         <div className="flex-grow text-center md:text-left">
           <h1 className="text-3xl font-bold">{user.displayName ?? user.username}</h1>
+          <p className="text-md text-cyan-400 opacity-80">@{user.username}</p>
           <p className="text-gray-300 italic mt-4">"{user.styleSignature || 'No style signature set.'}"</p>
           {isOwnProfile && <Button onClick={() => setIsEditing(true)} variant="secondary" className="mt-4 px-4 py-1 text-sm">Edit Profile</Button>}
         </div>
